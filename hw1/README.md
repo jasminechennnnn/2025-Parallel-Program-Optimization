@@ -1,100 +1,185 @@
-# 1 Usage
+# HW1: Matrix and Thread Pool
 
-## 1.1 part 1
+This homework consists of two parts:
+1. **Matrix Class Implementation and Operations** (1_matrix.cpp)
+2. **Thread Pool Implementation and Application** (2_threadpool.cpp)
+
+## Repository Link
+
+[2025-Parallel-Program-Optimization/hw1](https://github.com/jasminechennnnn/2025-Parallel-Program-Optimization/tree/main/hw1)
+
+## 1 Usage
+
+### 1.1 Part 1 - Matrix
 ```bash
 make 1_matrix
-```
-## 1.2 part 2
-```bash
-make 2_thread_pool
+./1_matrix
 ```
 
-# 2 Note
-## 2.1 Part 1
-**class Column_Major_Matrix**
+### 1.2 Part 2 - Thread Pool
+```bash
+make 2_threadpool
+./2_threadpool
+```
+
+### Common Commands
+```bash
+make all    # Compile all programs
+make clean  # Clean compiled files
+```
+
+## 2 My Notes
+
+### 2.1 Part 1 - Matrix
+
+#### Class Design
+
+**Column_Major_Matrix Class**
 ```cpp
 template <typename T>
 class Column_Major_Matrix {
 private:
-    vector<vector<T>> all_column;
+    std::vector<std::vector<T>> all_column;
     size_t rows;
     size_t cols;
 };
+public:
+-`Column_Major_Matrix(size_t rows, size_t cols)`: Constructor
+- `Column_Major_Matrix(const Column_Major_Matrix& other)`: Copy constructor
+- `Column_Major_Matrix(Column_Major_Matrix&& other) noexcept`: Move constructor
+- `operator=(const Column_Major_Matrix& other)`: Copy assignment
+- `operator=(Column_Major_Matrix&& other) noexcept`: Move assignment
+- `const vector<T>& getColumn(size_t idx) const`: Get column
+- `void setColumn(size_t idx, const vector<T>& column)`: Set column
+- `vector<T> getRow(size_t idx) const`: Get row
+- `void setRow(size_t idx, const vector<T>& row)`: Set row
+- `T get(size_t i, size_t j) const`: Get element
+- `void set(size_t i, size_t j, T value)`: Set element
+- `size_t getRows() const`: Get row count
+- `size_t getCols() const`: Get column count
+- `operator*(const Row_Major_Matrix<T>& other) const`: Matrix multiplication
+- `operator%(const Row_Major_Matrix<T>& other) const`: Multithreaded multiplication
+- `operator Row_Major_Matrix<T>() const`: Type conversion
+- `void print() const`: Print matrix (debugging)
 ```
 
-**class Row_Major_Matrix**
+**Row_Major_Matrix Class**
 ```cpp
 template <typename T>
 class Row_Major_Matrix {
 private:
-    vector<vector<T>> all_row;
+    std::vector<std::vector<T>> all_row;
     size_t rows;
     size_t cols;
 };
+public:
+- `Row_Major_Matrix(size_t rows, size_t cols)`: Constructor
+- `Row_Major_Matrix(const Row_Major_Matrix& other)`: Copy constructor
+- `Row_Major_Matrix(Row_Major_Matrix&& other) noexcept`: Move constructor
+- `operator=(const Row_Major_Matrix& other)`: Copy assignment
+- `operator=(Row_Major_Matrix&& other) noexcept`: Move assignment
+- `const vector<T>& getRow(size_t idx) const`: Get row
+- `void setRow(size_t idx, const vector<T>& row)`: Set row
+- `vector<T> getColumn(size_t idx) const`: Get column
+- `void setColumn(size_t idx, const vector<T>& column)`: Set column
+- `T get(size_t i, size_t j) const`: Get element
+- `void set(size_t i, size_t j, T value)`: Set element
+- `size_t getRows() const`: Get row count
+- `size_t getCols() const`: Get column count
+- `operator*(const Column_Major_Matrix<T>& other) const`: Matrix multiplication
+- `operator%(const Column_Major_Matrix<T>& other) const`: Multithreaded multiplication
+- `operator Column_Major_Matrix<T>() const`: Type conversion
+- `void print() const`: Print matrix (debugging)
 ```
 
-### constructors
-(Rule of 5)
-- constructor: takes arguments to specify the dimensions, fill with random values
-- copy constructor
-    ```cpp
-    // copy constructor, 把 obj1 的資源複製到 obj2  deep copy(O(n)), 被複製的東西預設還會再被使用
-    MyClass obj2(obj1);  // 直接初始化
-    MyClass obj2 = obj1; // 複製初始化
-    ```
-- move constructor
-    移動操作通常應標記為 noexcept，因為它們通常只涉及指針轉移，而不應該失敗。這樣告訴編譯器此函數不會拋出異常，編譯器可以進行更積極的優化
-    ```cpp
-    // move constructor, 把 obj1 的資源轉移給 obj2, obj1 的資源被清除 先shallow copy(O(1))然後再清除, 被移動的東西預設不會再被使用
-    MyClass obj2 = std::move(obj1);  // 直接初始化
-    ```
+#### Constructor Implementation (Rule of 5)
 
-### Overload assignment
-- assignment operator
-    ```cpp
-    // assignment operator, 清理 obj2 的現有資源，然後複製 obj1 的資源到 obj2
-    obj2 = obj1;  // obj2 必須是"已經存在"的物件
-    ```
-- move assignment
+- **Basic Constructor**:
+  - Takes dimension parameters and fills the matrix with randomly generated values
+  
+- **Copy Constructor**:
+  ```cpp
+  // Copy constructor - deep copy (O(n)), the copied object is expected to be used again
+  Column_Major_Matrix<int> cc2(cc1);  // Direct initialization
+  Row_Major_Matrix<int> rr2 = rr1;    // Copy initialization
+  ```
 
-### overload operator*
+- **Move Constructor**:
+  ```cpp
+  // Move constructor - shallow copy (O(1)) then clear the original object, which is not expected to be used again
+  Column_Major_Matrix<int> cc3 = std::move(cc2);
+  ```
 
+#### Assignment Operator Overloading
 
-### Overload operator%
+- **Copy Assignment Operator**:
+  ```cpp
+  // Clean the target object's existing resources, then copy resources from the source object
+  cc2 = cc1;  // cc2 must be an existing object
+  ```
 
+- **Move Assignment Operator**:
+  ```cpp
+  // Clean the target object's existing resources, then move resources from the source object (no copying)
+  cc2 = std::move(cc1);
+  ```
 
-### conversion operators
-**show it work by:**
+#### Matrix Multiplication Operator Overloading
+
+- **`operator*`**: Implements standard matrix multiplication
+- **`operator%`**: Implements multi-threaded matrix multiplication (using 10 threads)
+
+#### Type Conversion Operators
+
+Implements implicit conversion between matrix types, as shown in the example:
 ```cpp
-Column_Major_Matrix<int> cc (55, 1000);
-Row_Major_Matrix<int> rr (1000, 66);
-Row_Major_Matrix<int> rr = cc*rr;
+Column_Major_Matrix<int> cc(55, 1000);
+Row_Major_Matrix<int> rr(1000, 66);
+Row_Major_Matrix<int> result = cc * rr;  // Using implicit conversion
 ```
 
-### getter/setter function
-access each column and row by an index.
+#### Getter/Setter Functions
 
+Provides methods to access rows and columns by index:
+- `getRow(size_t idx)`
+- `setRow(size_t idx, const std::vector<T>& row)`
+- `getColumn(size_t idx)`
+- `setColumn(size_t idx, const std::vector<T>& column)`
+- `get(size_t i, size_t j)`
+- `set(size_t i, size_t j, T value)`
 
-## 2.2 Part 2
-### Class pool
+### 2.2 Part 2 - Thread Pool
 
-1. Design a thread pool class with following features:
-A. Allow users to send jobs into the pool
-B. Allow any kind of callable objects as jobs
-C. Maintain a job queue to store unfinished jobs
-i. Hint: element type: std::function/std::bind or package_task
-D. Have 5 threads always waiting for new jobs. Each thread will keep a record of total
-running time throughout the lifespan of the thread.
-E. Threads are terminated(joined) only when the thread pool is
-destructed. The total running time of each thread will be shown on the screen
-upon destruction along with the std::thread::id.
-F. Use condition variable and mutex to notify threads
-to do works
-2. 3. 4. Write one function (named print_1), which can generate a random integer number and
-then print out ‘1’ if the number is an odd number otherwise ‘0’
-. Note that cout is also a
-shared resource.
-Write a print_2 functor, which simply prints “2” on the screen. Use conditional variable
-to ensure that print_2 functor can only be executed when there is no more print_1 job
-to be executed.
-In main, first send 496 functions and then 4 functors into the pool.
+#### Thread Pool Class Requirements
+
+- [x] A. Allow users to send jobs into the pool - implemented via the `pool.enqueue()` method
+- [x] B. Allow any kind of callable objects as jobs - using `std::function<void()>` and templated `enqueue` method
+- [x] C. Maintain a job queue to store unfinished jobs - using `std::queue<std::function<void()>> tasks`
+- [x] D. Have 5 threads always waiting for new jobs, each keeping a record of total running time - created in the constructor and using `std::chrono` to track running time
+- [x] E. Threads are terminated (joined) only when the thread pool is destructed, showing total running time and thread ID - implemented in the destructor
+- [x] F. Use condition variable and mutex to notify threads to do work - using `std::condition_variable` and `std::mutex`
+
+#### Special Task Implementation
+
+- [x] Implemented `print_1` function: generates a random integer number and prints '1' if the number is odd, otherwise '0'; protects cout as a shared resource
+- [x] Implemented `print_2` functor: prints "2", ensuring it's only executed when there are no more `print_1` jobs running - using condition variable for the waiting mechanism
+- [x] In main, first sends 496 functions and then 4 functors into the pool
+
+#### Thread Pool Core Design
+
+```cpp
+class ThreadPool {
+private:
+    std::vector<std::thread> workers;                // Thread vector
+    std::queue<std::function<void()>> tasks;         // Task queue
+    std::mutex queue_mutex;                          // Task queue mutex
+    std::condition_variable condition;               // Condition variable for thread notification
+    std::condition_variable print1_done_condition;   // Condition variable for print_1 completion
+    std::atomic<int> active_print1_tasks;            // Counter for active print_1 tasks
+    bool stop;                                       // Stop flag
+    
+    // Thread running time and ID records
+    std::vector<std::chrono::milliseconds> running_times;
+    std::vector<std::thread::id> thread_ids;
+};
+```
