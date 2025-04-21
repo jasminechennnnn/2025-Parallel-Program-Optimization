@@ -30,9 +30,8 @@
 *.exe
 *.out
 *.app
-
-# Files without extensions
-!hw1/*.*
+hw1/1_matrix
+hw1/2_threadpool
 
 # macOS 
 .DS_Store
@@ -41,3 +40,13 @@
 # slides/ 
 slides/
 *.pdf
+
+# Mardown notes
+note.md
+
+# Upload folder
+hw1_312511065/
+hw2_312511065/
+
+# Others
+ok/
