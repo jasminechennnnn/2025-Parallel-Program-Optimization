@@ -32,6 +32,7 @@
 *.app
 hw1/1_matrix
 hw1/2_threadpool
+hw2/ssw_xsimd
 
 # macOS 
 .DS_Store
