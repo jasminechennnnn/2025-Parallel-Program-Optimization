@@ -7,4 +7,8 @@ This homework consists of two parts:
 1. **Matrix Class Implementation and Operations** (1_matrix.cpp)
 2. **Thread Pool Implementation and Application** (2_threadpool.cpp)
 
-For detailed documentation, see [hw1/README.md](hw1/README.md).
+For more detail, see [hw1/README.md](hw1/README.md).
+
+## HW2: pairwise alignment with the Striped Smither Waterman algorithm using XSIMD
+
+For more detail, see [hw2/README.md](hw2/README.md).

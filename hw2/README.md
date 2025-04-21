@@ -29,29 +29,49 @@ running on M3 chip for example:
 XSIMD info: 
 NEON available
 Register size: 128 bits (16 bytes)
-DEBUG C++: Final values:
-DEBUG C++: results[0]: score=37, ref=491, read=50
-DEBUG C++: results[1]: score=28, ref=426, read=0
-DEBUG C++: Final values:
-DEBUG C++: results[0]: score=37, ref=452, read=34
-DEBUG C++: results[1]: score=16, ref=480, read=0
 
---------XSIMD result--------
+--------XSIMD result for target: chr1--------
 target_name: chr1
 query_name: 6:163296599:F:198;None;None/1
-Baseline time: 1.1 ms
+Baseline time: 1.2 ms
 SIMD time: 0.1 ms
-Speedup: 8.0X
+Speedup: 10.8X
 optimal_alignment_score: 37    suboptimal_alignment_score: 28    strand: +    target_begin: 453    target_end: 492    query_begin: 17    query_end: 51
 
 Seq1(Target):      453    CCAATGCCACAAAACATCTGTCTCTAACTGGTG--TGTGTGT        492
                           |||  ||| ||||  |||||| |*||| |||||  |*|||||
 Seq2(Query):        17    CCA--GCC-CAAA--ATCTGT-TTTAA-TGGTGGATTTGTGT         51
+
+--------XSIMD result for target: chr1--------
+target_name: chr1
+query_name: 3:153409880:F:224;None;3,153410143,G,A/1
+Baseline time: 1.2 ms
+SIMD time: 0.1 ms
+Speedup: 12.2X
+optimal_alignment_score: 42    suboptimal_alignment_score: 41    strand: +    target_begin: 523    target_end: 577    query_begin: 3    query_end: 53
+
+Seq1(Target):      523    GAGAGAGAAAATTTCACTCCCTCCATAAATCTCACAGTATTCTTTTCTTTTTCCT        577
+                          || ||||**|||||*|*||*||*||*|*|**|*|| ||| |||||| ||||*|||
+Seq2(Query):         3    GA-AGAGTTAATTTAAGTCACTTCAAACAGATTAC-GTA-TCTTTT-TTTTCCCT         53
+
+--------XSIMD result for target: chr1--------
+target_name: chr1
+query_name: Y:26750420:R:-132;None;None/1
+Baseline time: 1.3 ms
+SIMD time: 0.1 ms
+Speedup: 17.2X
+optimal_alignment_score: 32    suboptimal_alignment_score: 29    strand: +    target_begin: 120    target_end: 163    query_begin: 1    query_end: 44
+
+Seq1(Target):      120    AA-AACATAGGAA-AAAATTA--TTTAATAATAAAATTTA-ATTGGCAA        163
+                          || ||||   ||| **|||||  ||*||*|||  |*|||| |||*||||
+Seq2(Query):         1    AACAACA---GAAGTTAATTAGCTTCAAAAAT--ACTTTATATTTGCAA         44
+
 ```
 
 ## 3 References
 - Smither Waterman algorithm: https://youtu.be/f1VYKHGKQsw?si=5nNK1AluUadAx6Ws
 - Stripped Smither Waterman algorithm (and other cpu acceleration methods): https://zhuanlan.zhihu.com/p/676835444
+- SSW Library: https://github.com/mengyao/Complete-Striped-Smith-Waterman-Library
 - XSIMD installation: https://formulae.brew.sh/formula/xsimd
 - XSIMD source code: https://github.com/xtensor-stack/xsimd?tab=readme-ov-file
 - SSE2 instructions: https://blog.csdn.net/tercel_zhang/article/details/80050120
