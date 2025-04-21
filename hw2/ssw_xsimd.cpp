@@ -647,11 +647,11 @@ end:
         }
     }
     
-    cerr << "DEBUG C++: Final values:" << endl;
-    cerr << "DEBUG C++: results[0]: score=" << results[0].score << ", ref=" << results[0].ref
-        << ", read=" << results[0].read << endl;
-    cerr << "DEBUG C++: results[1]: score=" << results[1].score << ", ref=" << results[1].ref
-        << ", read=" << results[1].read << endl;
+    // cerr << "DEBUG C++: Final values:" << endl;
+    // cerr << "DEBUG C++: results[0]: score=" << results[0].score << ", ref=" << results[0].ref
+    //     << ", read=" << results[0].read << endl;
+    // cerr << "DEBUG C++: results[1]: score=" << results[1].score << ", ref=" << results[1].ref
+    //     << ", read=" << results[1].read << endl;
 
     return results;
 }

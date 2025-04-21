@@ -54,3 +54,4 @@ Seq2(Query):        17    CCA--GCC-CAAA--ATCTGT-TTTAA-TGGTGGATTTGTGT         51
 - Stripped Smither Waterman algorithm (and other cpu acceleration methods): https://zhuanlan.zhihu.com/p/676835444
 - XSIMD installation: https://formulae.brew.sh/formula/xsimd
 - XSIMD source code: https://github.com/xtensor-stack/xsimd?tab=readme-ov-file
+- SSE2 instructions: https://blog.csdn.net/tercel_zhang/article/details/80050120

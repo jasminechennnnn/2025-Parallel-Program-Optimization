@@ -181,43 +181,44 @@ int main(int argc, char* argv[]) {
         cerr << "Failed to read query sequence from " << argv[2] << endl;
         return 1;
     }
-    
-    // Use the first sequence from each file
-    FastaSequence& target_seq = target_sequences[0];
-    FastaSequence& query_seq = query_sequences[0];
-    
-    // Initialize scoring matrix for nucleotides
-    ScoringMatrix scoring_matrix;
-    scoring_matrix.match = match;
-    scoring_matrix.mismatch = -mismatch;
-    scoring_matrix.gap_open = -gap_open;
-    scoring_matrix.gap_extend = -gap_extend;
-    
-    // Run baseline (non-SIMD) alignment
-    auto start_baseline = chrono::high_resolution_clock::now();
-    AlignmentResult baseline_result = smith_waterman_baseline(
-        target_seq.sequence, query_seq.sequence, scoring_matrix);
-    auto end_baseline = chrono::high_resolution_clock::now();
-    double baseline_time = chrono::duration<double, milli>(
-        end_baseline - start_baseline).count();
-    
-    // Run SIMD-accelerated alignment
-    auto start_simd = chrono::high_resolution_clock::now();
-    AlignmentResult simd_result = smith_waterman_striped_simd(
-        target_seq.sequence, query_seq.sequence, scoring_matrix);
-    auto end_simd = chrono::high_resolution_clock::now();
-    double simd_time = chrono::duration<double, milli>(
-        end_simd - start_simd).count();
-    
-    // Print the alignment result
-    cout << "\n--------XSIMD result--------" << endl;
-    print_alignment(simd_result, target_seq.name, query_seq.name,
-                   target_seq.sequence, query_seq.sequence, baseline_time, simd_time);
 
-    // Print the alignment result
-    // cout << "\n--------baseline result--------" << endl;
-    // print_alignment(baseline_result, target_seq.name, query_seq.name,
-    //                target_seq.sequence, query_seq.sequence, baseline_time, simd_time);
-    
+    // Process all sequences in the query_sequences vector
+    for (size_t i = 0; i < query_sequences.size(); ++i) {
+        FastaSequence& target_seq = target_sequences[0];
+        FastaSequence& query_seq = query_sequences[i];
+        
+        // Initialize scoring matrix for nucleotides
+        ScoringMatrix scoring_matrix;
+        scoring_matrix.match = match;
+        scoring_matrix.mismatch = -mismatch;
+        scoring_matrix.gap_open = -gap_open;
+        scoring_matrix.gap_extend = -gap_extend;
+        
+        // Run baseline (non-SIMD) alignment
+        auto start_baseline = chrono::high_resolution_clock::now();
+        AlignmentResult baseline_result = smith_waterman_baseline(
+            target_seq.sequence, query_seq.sequence, scoring_matrix);
+        auto end_baseline = chrono::high_resolution_clock::now();
+        double baseline_time = chrono::duration<double, milli>(
+            end_baseline - start_baseline).count();
+        
+        // Run SIMD-accelerated alignment
+        auto start_simd = chrono::high_resolution_clock::now();
+        AlignmentResult simd_result = smith_waterman_striped_simd(
+            target_seq.sequence, query_seq.sequence, scoring_matrix);
+        auto end_simd = chrono::high_resolution_clock::now();
+        double simd_time = chrono::duration<double, milli>(
+            end_simd - start_simd).count();
+        
+        // Print the alignment result
+        cout << "\n--------XSIMD result for target: " << target_seq.name << "--------" << endl;
+        print_alignment(simd_result, target_seq.name, query_seq.name,
+                    target_seq.sequence, query_seq.sequence, baseline_time, simd_time);
+
+        // Uncomment to print baseline results if needed
+        // cout << "\n--------baseline result for target " << i+1 << ": " << target_seq.name << "--------" << endl;
+        // print_alignment(baseline_result, target_seq.name, query_seq.name,
+        //                target_seq.sequence, query_seq.sequence, baseline_time, simd_time);
+    }
     return 0;
 }
