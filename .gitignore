@@ -33,6 +33,7 @@
 hw1/1_matrix
 hw1/2_threadpool
 hw2/ssw_xsimd
+hw3/ssw_cuda
 
 # macOS 
 .DS_Store
@@ -50,6 +51,8 @@ hw1_312511065/
 hw2_312511065/
 
 # Others
+tmp.cpp
 ok/
 hw2/Complete-Striped-Smith-Waterman-Library/
 vcpkg/
+practice/
