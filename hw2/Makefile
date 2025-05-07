@@ -16,7 +16,7 @@ HEADERS = ssw_xsimd.h
 # Detect operating system
 UNAME_S := $(shell uname -s)
 
-VCPKG_PATH = /home/nycu813/Wall/2025-Parallel-Program-Optimization/vcpkg/installed/x64-linux/include
+VCPKG_PATH = $(HOME)/Wall/2025-Parallel-Program-Optimization/vcpkg/installed/x64-linux/include
 
 # macOS specific settings
 ifeq ($(UNAME_S),Darwin)
