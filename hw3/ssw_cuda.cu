@@ -353,7 +353,7 @@ __global__ void ssw_kernel(
     }
     
     // Print debug info for every position
-    printf("CUDA Thread %d (ref pos %d): col_max = %d\n", i, pos, (int)max_val);
+    // printf("CUDA Thread %d (ref pos %d): col_max = %d\n", i, pos, (int)max_val);
     
     // Free memory if allocated in global memory
     if (readLen * 2 * sizeof(T) > 48 * 1024) {
@@ -490,7 +490,7 @@ std::vector<alignment_end> ssw_cuda_template(
     std::cout << "CUDA Final results:" << std::endl;
     std::cout << "  Best score: " << final_score << " at ref=" << max_pos_ref
               << ", read=" << max_pos_read << std::endl;
-    std::cout << "  Second best score: " << second_max << " at ref=" << second_max_pos << std::endl;
+    // std::cout << "  Second best score: " << second_max << " at ref=" << second_max_pos << std::endl;
     
     // Prepare return values
     std::vector<alignment_end> results(2);
