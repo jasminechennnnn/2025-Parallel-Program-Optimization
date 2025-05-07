@@ -577,7 +577,8 @@ end:
             vMaxMark = vMaxScore;
             max_batch(temp, vMaxScore);
             vMaxScore = vMaxMark;
-            
+            std::cerr << "DEBUG C++: SIMD Iteration " << i << ": temp = " << static_cast<int>(temp) << std::endl;
+
             if (temp > max) {
                 max = temp;
                 
@@ -595,6 +596,7 @@ end:
         // Record max score of current column
         T col_max;
         max_batch(col_max, vMaxColumn);
+        std::cerr << "DEBUG C++: SIMD Iteration " << i << ": col_max = " << static_cast<int>(col_max) << std::endl;
         maxColumn[i] = col_max;
         
         // Check for termination

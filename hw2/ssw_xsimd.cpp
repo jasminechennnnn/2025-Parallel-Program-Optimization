@@ -916,10 +916,10 @@ static vector<pair<char, int>> banded_sw(
 }
 
 /**
- * Main function for the Smith-Waterman alignment algorithm with SSE acceleration
+ * Main function for the Smith-Waterman alignment algorithm with
  * 
- * @param profile_byte Byte-sized profile for SSE computations
- * @param profile_word Word-sized profile for SSE computations
+ * @param profile_byte Byte-sized profile
+ * @param profile_word Word-sized profile
  * @param ref_num Reference sequence
  * @param read_num Read sequence
  * @param weight_gapO Gap opening penalty
@@ -1075,7 +1075,6 @@ unique_ptr<s_align> ssw_main(
     vector<int8_t> read_slice(read_num.begin() + r->read_begin1, 
                                  read_num.begin() + r->read_end1 + 1);
 
-    // Create scoring matrix (assuming it's already passed as a parameter to ssw_main)
     auto path = banded_sw(ref_slice, read_slice, r->score1, 
                          weight_gapO, weight_gapE, band_width, scoring_matrix);
 

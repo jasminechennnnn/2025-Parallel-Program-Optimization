@@ -47,44 +47,171 @@ __device__ T device_saturated_sub(T a, const U b) {
 }
 
 /**
- * @brief CUDA kernel for Smith-Waterman alignment
+ * @brief Custom atomicMax for int8_t type
+ * CUDA doesn't provide built-in atomicMax for int8_t
+ */
+__device__ inline int8_t atomicMaxInt8(int8_t* address, int8_t val) {
+    // Convert address to int
+    unsigned int* address_as_int = (unsigned int*)((void*)address);
+    
+    // Calculate byte position within the int
+    unsigned int byte_pos = ((unsigned long long)address & 3) * 8;
+    
+    // Create mask
+    unsigned int mask = 0xFF << byte_pos;
+    
+    // Read current value
+    unsigned int old = *address_as_int;
+    unsigned int assumed;
+    
+    do {
+        assumed = old;
+        // Extract current value at byte position
+        int8_t current = (int8_t)((old >> byte_pos) & 0xFF);
+        
+        // If current value is already greater or equal, no update needed
+        if (current >= val) break;
+        
+        // Create new value with updated byte
+        unsigned int new_val = (old & ~mask) | ((unsigned int)val << byte_pos);
+        
+        // Try to update
+        old = atomicCAS(address_as_int, assumed, new_val);
+    } while (assumed != old);
+    
+    // Return old value
+    return (int8_t)((old >> byte_pos) & 0xFF);
+}
+
+/**
+ * @brief Custom atomicMax for int16_t type
+ * CUDA doesn't provide built-in atomicMax for int16_t
+ */
+__device__ inline int16_t atomicMaxInt16(int16_t* address, int16_t val) {
+    // Convert address to int
+    unsigned int* address_as_int = (unsigned int*)((void*)address);
+    
+    // Calculate half-word position within the int
+    unsigned int byte_pos = ((unsigned long long)address & 2) * 8;
+    
+    // Create mask
+    unsigned int mask = 0xFFFF << byte_pos;
+    
+    // Read current value
+    unsigned int old = *address_as_int;
+    unsigned int assumed;
+    
+    do {
+        assumed = old;
+        // Extract current value at half-word position
+        int16_t current = (int16_t)((old >> byte_pos) & 0xFFFF);
+        
+        // If current value is already greater or equal, no update needed
+        if (current >= val) break;
+        
+        // Create new value with updated half-word
+        unsigned int new_val = (old & ~mask) | ((unsigned int)val << byte_pos);
+        
+        // Try to update
+        old = atomicCAS(address_as_int, assumed, new_val);
+    } while (assumed != old);
+    
+    // Return old value
+    return (int16_t)((old >> byte_pos) & 0xFFFF);
+}
+
+/**
+ * @brief Custom atomic exchange for int8_t type
+ */
+__device__ inline int8_t atomicExchInt8(int8_t* address, int8_t val) {
+    // Convert address to int
+    unsigned int* address_as_int = (unsigned int*)((void*)address);
+    
+    // Calculate byte position within the int
+    unsigned int byte_pos = ((unsigned long long)address & 3) * 8;
+    
+    // Create mask
+    unsigned int mask = 0xFF << byte_pos;
+    
+    // Read current value
+    unsigned int old = *address_as_int;
+    unsigned int assumed;
+    
+    do {
+        assumed = old;
+        // Create new value with updated byte
+        unsigned int new_val = (old & ~mask) | ((unsigned int)val << byte_pos);
+        
+        // Try to update
+        old = atomicCAS(address_as_int, assumed, new_val);
+    } while (assumed != old);
+    
+    // Return old value
+    return (int8_t)((old >> byte_pos) & 0xFF);
+}
+
+/**
+ * @brief Custom atomic exchange for int16_t type
+ */
+__device__ inline int16_t atomicExchInt16(int16_t* address, int16_t val) {
+    // Convert address to int
+    unsigned int* address_as_int = (unsigned int*)((void*)address);
+    
+    // Calculate half-word position within the int
+    unsigned int byte_pos = ((unsigned long long)address & 2) * 8;
+    
+    // Create mask
+    unsigned int mask = 0xFFFF << byte_pos;
+    
+    // Read current value
+    unsigned int old = *address_as_int;
+    unsigned int assumed;
+    
+    do {
+        assumed = old;
+        // Create new value with updated half-word
+        unsigned int new_val = (old & ~mask) | ((unsigned int)val << byte_pos);
+        
+        // Try to update
+        old = atomicCAS(address_as_int, assumed, new_val);
+    } while (assumed != old);
+    
+    // Return old value
+    return (int16_t)((old >> byte_pos) & 0xFFFF);
+}
+
+/**
+ * @brief Main CUDA kernel for Smith-Waterman alignment
  * 
- * Each thread processes one reference position in a grid-like pattern.
- * Multiple blocks handle different sections of the reference sequence.
+ * This kernel processes one row of the dynamic programming matrix at a time,
+ * following a similar approach as the SIMD version.
+ * 
+ * PARALLELIZATION: Each thread processes one reference position (one column of the DP matrix)
  * 
  * @tparam T Value type (int8_t or int16_t)
- * @param ref_num Reference sequence
- * @param ref_dir Reference direction (0: forward, 1: reverse)
- * @param refLen Length of reference sequence
- * @param readLen Length of read/query sequence
- * @param weight_gapO Gap open penalty
- * @param weight_gapE Gap extension penalty
- * @param profile Query profile (flattened)
- * @param terminate Termination score
- * @param bias Bias value for int8_t version
- * @param maxColumn Output array for maximum scores at each ref position
- * @param end_read_column Output array for read positions at each max score
  */
 template <typename T>
-__global__ void ssw_kernel(const int8_t* ref_num,
-                          int8_t ref_dir,
-                          int32_t refLen,
-                          int32_t readLen,
-                          const uint8_t weight_gapO,
-                          const uint8_t weight_gapE,
-                          const T* profile,
-                          T terminate,
-                          T bias,
-                          T* maxColumn,
-                          int32_t* end_read_column) {
-    
-    // Calculate reference position for this thread
+__global__ void ssw_kernel(
+    const int8_t* ref_num,
+    int8_t ref_dir,
+    int32_t refLen,
+    int32_t readLen,
+    const uint8_t weight_gapO,
+    const uint8_t weight_gapE,
+    const T* profile,
+    T terminate,
+    T bias,
+    T* maxColumn,
+    int32_t* end_read_column,
+    int32_t* max_pos_ref,   // Reference position of max score
+    int32_t* max_pos_read,  // Read position of max score
+    T* max_score            // Global max score
+) {
+    // Thread index = reference position to process
     int32_t i = blockIdx.x * blockDim.x + threadIdx.x;
-    
-    // Boundary check
     if (i >= refLen) return;
     
-    // If we're in reverse mode, adjust the position
+    // If we're in reverse direction, adjust position
     int32_t pos;
     if (ref_dir == 1) {
         pos = refLen - 1 - i;
@@ -92,24 +219,42 @@ __global__ void ssw_kernel(const int8_t* ref_num,
         pos = i;
     }
     
-    // Initialize H, E, and F vectors for this reference position
-    T* H = new T[readLen]();
-    T* E = new T[readLen]();
-    T* F = new T[readLen]();
+    // Allocate arrays for H, E (and F is scalar)
+    // Use shared memory if readLen is small enough, otherwise use global memory
+    extern __shared__ char shared_mem[];
+    T* H;
+    T* E;
+    
+    // Check if shared memory allocation is enough
+    if (readLen * 2 * sizeof(T) <= 48 * 1024) { // Typical shared memory size per block
+        // Use shared memory
+        H = (T*)shared_mem + threadIdx.x * readLen * 2;
+        E = H + readLen;
+    } else {
+        // Allocate in global memory
+        H = new T[readLen];
+        E = new T[readLen];
+    }
+    
+    // Initialize arrays
+    for (int32_t j = 0; j < readLen; ++j) {
+        H[j] = 0;
+        E[j] = 0;
+    }
     
     // Get profile offset for current reference base
     int32_t nt = ref_num[pos];
     const T* vP = profile + (nt * readLen);
     
-    // Local max tracking
-    T max_score = 0;
-    int32_t max_pos = -1;
+    // Initialize max tracking
+    T max_val = 0;
+    int32_t max_val_pos = -1;
+    T F = 0;
     
-    // Process each read position
-    for (int32_t j = 0; j < readLen; j++) {
+    // Process all query positions
+    for (int32_t j = 0; j < readLen; ++j) {
         // Calculate H[j]
-        T H_prev = (j > 0) ? H[j-1] : 0;
-        T H_diag = (j > 0) ? H_prev : 0;
+        T H_diag = (j > 0) ? H[j-1] : 0;
         
         // Add profile score
         H[j] = H_diag + vP[j];
@@ -121,229 +266,120 @@ __global__ void ssw_kernel(const int8_t* ref_num,
         
         // Calculate E (gap in reference)
         E[j] = max(device_saturated_sub(E[j], weight_gapE), 
-                  device_saturated_sub(H[j], weight_gapO));
-        
-        // Calculate F (gap in query)
-        F[j] = max(device_saturated_sub(F[j], weight_gapE), 
-                  device_saturated_sub(H[j], weight_gapO));
-        
-        // Get max of H, E, F
-        H[j] = max(H[j], max(E[j], F[j]));
-        
-        // Update local max
-        if (H[j] > max_score) {
-            max_score = H[j];
-            max_pos = j;
-        }
-        
-        // If at end of read, potentially update globals
-        if (j == readLen - 1) {
-            maxColumn[pos] = max_score;
-            end_read_column[pos] = max_pos;
-        }
-        
-        // Early termination if reached target score
-        if (max_score >= terminate && terminate > 0) {
-            break;
-        }
-    }
-    
-    // Free temp memory
-    delete[] H;
-    delete[] E;
-    delete[] F;
-}
-
-/**
- * @brief Optimized version of SW kernel using shared memory
- * 
- * This version uses shared memory for better performance, especially for 
- * shorter read sequences that can fit in shared memory.
- * 
- * @tparam T Value type (int8_t or int16_t)
- */
-template <typename T>
-__global__ void ssw_shared_kernel(const int8_t* ref_num,
-                                int8_t ref_dir,
-                                int32_t refLen,
-                                int32_t readLen,
-                                const uint8_t weight_gapO,
-                                const uint8_t weight_gapE,
-                                const T* profile,
-                                T terminate,
-                                T bias,
-                                T* maxColumn,
-                                int32_t* end_read_column) {
-    
-    // Shared memory for temp arrays (better for shorter reads)
-    extern __shared__ char shared_mem[];
-    T* shared_H = (T*)shared_mem;
-    T* shared_E = shared_H + readLen;
-    
-    // Calculate reference position for this thread
-    int32_t i = blockIdx.x * blockDim.x + threadIdx.x;
-    
-    // Boundary check
-    if (i >= refLen) return;
-    
-    // If we're in reverse mode, adjust the position
-    int32_t pos;
-    if (ref_dir == 1) {
-        pos = refLen - 1 - i;
-    } else {
-        pos = i;
-    }
-    
-    // Initialize shared memory
-    for (int32_t j = 0; j < readLen; j++) {
-        shared_H[j] = 0;
-        shared_E[j] = 0;
-    }
-    
-    // Get profile offset for current reference base
-    int32_t nt = ref_num[pos];
-    const T* vP = profile + (nt * readLen);
-    
-    // Local max tracking
-    T max_score = 0;
-    int32_t max_pos = -1;
-    T F = 0;
-    
-    // Process each read position
-    for (int32_t j = 0; j < readLen; j++) {
-        // Calculate H[j]
-        T H_prev = (j > 0) ? shared_H[j-1] : 0;
-        T H_diag = (j > 0) ? H_prev : 0;
-        
-        // Add profile score
-        shared_H[j] = H_diag + vP[j];
-        
-        // Subtract bias if using int8_t
-        if (std::is_same<T, int8_t>::value) {
-            shared_H[j] = shared_H[j] - bias;
-        }
-        
-        // Calculate E (gap in reference)
-        shared_E[j] = max(device_saturated_sub(shared_E[j], weight_gapE), 
-                        device_saturated_sub(shared_H[j], weight_gapO));
+                   device_saturated_sub(H[j], weight_gapO));
         
         // Calculate F (gap in query)
         F = max(device_saturated_sub(F, weight_gapE), 
-              device_saturated_sub(shared_H[j], weight_gapO));
+                device_saturated_sub(H[j], weight_gapO));
         
         // Get max of H, E, F
-        shared_H[j] = max(shared_H[j], max(shared_E[j], F));
+        H[j] = max(H[j], max(E[j], F));
         
         // Update local max
-        if (shared_H[j] > max_score) {
-            max_score = shared_H[j];
-            max_pos = j;
+        if (H[j] > max_val) {
+            max_val = H[j];
+            max_val_pos = j;
         }
     }
     
-    // Update global memory
-    maxColumn[pos] = max_score;
-    end_read_column[pos] = max_pos;
-}
-
-/**
- * @brief Find the maximum score and its position
- * 
- * @tparam T Value type (int8_t or int16_t)
- * @param maxColumn Array of maximum scores
- * @param refLen Length of reference sequence
- * @param bias Bias value for int8_t version
- * @return pair<uint16_t, int32_t> Maximum score and its position
- */
-template <typename T>
-std::pair<uint16_t, int32_t> find_max_score(const std::vector<T>& maxColumn, int32_t refLen, T bias) {
-    T max = 0;
-    int32_t max_pos = -1;
+    // Lazy_F loop - equivalent to SIMD version
+    // This is a key part of the algorithm!
+    for (int32_t k = 0; k < readLen; ++k) {
+        bool early_terminate = true;
+        T prev_F = 0;
+        
+        for (int32_t j = 0; j < readLen; ++j) {
+            // Shift F value
+            T curr_F = (j > 0) ? prev_F : 0;
+            prev_F = F;
+            
+            // Compare with H and update
+            if (H[j] < curr_F) {
+                H[j] = curr_F;
+                
+                // Update local max if needed
+                if (curr_F > max_val) {
+                    max_val = curr_F;
+                    max_val_pos = j;
+                }
+                
+                // Calculate new F
+                T H_gap = device_saturated_sub(H[j], weight_gapO);
+                F = device_saturated_sub(curr_F, weight_gapE);
+                F = max(F, H_gap);
+                
+                // Check if we need another iteration
+                if (F > H_gap) {
+                    early_terminate = false;
+                }
+            }
+        }
+        
+        // If no updates were needed, we can exit the loop
+        if (early_terminate) break;
+    }
     
-    for (int32_t i = 0; i < refLen; i++) {
-        if (maxColumn[i] > max) {
-            max = maxColumn[i];
-            max_pos = i;
+    // Update maxColumn and end_read_column
+    maxColumn[pos] = max_val;
+    end_read_column[pos] = max_val_pos;
+    
+    // Update global max using custom atomic operations
+    if (max_val > 0) {
+        // Use type-specific atomic operations
+        T old_max;
+        if (std::is_same<T, int8_t>::value) {
+            old_max = atomicMaxInt8((int8_t*)max_score, max_val);
+            
+            // If we updated the max, also update positions
+            if (max_val > old_max) {
+                atomicExch(max_pos_ref, pos);
+                atomicExch(max_pos_read, max_val_pos);
+                
+                // Debug output for new max
+                printf("New max score at ref[%d] read[%d]: %d\n", pos, max_val_pos, (int)max_val);
+            }
+        } else if (std::is_same<T, int16_t>::value) {
+            old_max = atomicMaxInt16((int16_t*)max_score, max_val);
+            
+            // If we updated the max, also update positions
+            if (max_val > old_max) {
+                atomicExch(max_pos_ref, pos);
+                atomicExch(max_pos_read, max_val_pos);
+                
+                // Debug output for new max
+                printf("New max score at ref[%d] read[%d]: %d\n", pos, max_val_pos, (int)max_val);
+            }
         }
     }
     
-    // Handle overflow for int8_t
-    uint16_t final_score;
-    if (std::is_same<T, int8_t>::value) {
-        auto max_with_bias = static_cast<uint16_t>(max) + static_cast<uint16_t>(bias);
-        final_score = max_with_bias >= 255 ? 255 : max;
-    } else {
-        final_score = max;
+    // Print debug info for every position
+    printf("CUDA Thread %d (ref pos %d): col_max = %d\n", i, pos, (int)max_val);
+    
+    // Free memory if allocated in global memory
+    if (readLen * 2 * sizeof(T) > 48 * 1024) {
+        delete[] H;
+        delete[] E;
     }
-    
-    return std::make_pair(final_score, max_pos);
-}
-
-/**
- * @brief Find the second best alignment
- * 
- * @tparam T Value type (int8_t or int16_t)
- * @param maxColumn Array of maximum scores
- * @param end_ref Best reference ending position
- * @param refLen Reference length
- * @param maskLen Mask length for finding second best
- * @return pair<uint16_t, int32_t> Second best score and its position
- */
-template <typename T>
-std::pair<uint16_t, int32_t> find_second_best(const std::vector<T>& maxColumn, 
-                                            int32_t end_ref, 
-                                            int32_t refLen, 
-                                            int32_t maskLen) {
-    T second_max = 0;
-    int32_t second_max_pos = -1;
-    
-    // Search before the best alignment
-    int32_t edge = (end_ref - maskLen) > 0 ? (end_ref - maskLen) : 0;
-    for (int32_t i = 0; i < edge; i++) {
-        if (maxColumn[i] > second_max) {
-            second_max = maxColumn[i];
-            second_max_pos = i;
-        }
-    }
-    
-    // Search after the best alignment
-    edge = (end_ref + maskLen) > refLen ? refLen : (end_ref + maskLen);
-    for (int32_t i = edge + 1; i < refLen; i++) {
-        if (maxColumn[i] > second_max) {
-            second_max = maxColumn[i];
-            second_max_pos = i;
-        }
-    }
-    
-    return std::make_pair(second_max, second_max_pos);
 }
 
 /**
  * @brief Main CUDA Smith-Waterman implementation
  * 
  * @tparam T Value type (int8_t or int16_t)
- * @param ref_num Reference sequence
- * @param ref_dir Reference direction
- * @param read_num Query sequence
- * @param weight_gapO Gap open penalty
- * @param weight_gapE Gap extension penalty
- * @param profile Query profile
- * @param terminate Termination score
- * @param bias Bias value for int8_t
- * @param maskLen Mask length for second best
- * @return vector<alignment_end> Best and second best alignments
  */
 template <typename T>
-std::vector<alignment_end> ssw_cuda_template(const std::vector<int8_t>& ref_num,
-                                           int8_t ref_dir,
-                                           const std::vector<int8_t>& read_num,
-                                           const uint8_t weight_gapO,
-                                           const uint8_t weight_gapE,
-                                           const std::vector<T>& profile,
-                                           T terminate,
-                                           T bias,
-                                           int32_t maskLen) {
-    // Get sizes
+std::vector<alignment_end> ssw_cuda_template(
+    const std::vector<int8_t>& ref_num,
+    int8_t ref_dir,
+    const std::vector<int8_t>& read_num,
+    const uint8_t weight_gapO,
+    const uint8_t weight_gapE,
+    const std::vector<T>& profile,
+    T terminate,
+    T bias,
+    int32_t maskLen) {
+    
+    // Calculate sizes
     const auto refLen = static_cast<int32_t>(ref_num.size());
     const auto readLen = static_cast<int32_t>(read_num.size());
     
@@ -356,96 +392,130 @@ std::vector<alignment_end> ssw_cuda_template(const std::vector<int8_t>& ref_num,
     int8_t *d_ref_num;
     T *d_profile, *d_maxColumn;
     int32_t *d_end_read_column;
+    T *d_max_score;
+    int32_t *d_max_pos_ref, *d_max_pos_read;
     
-    // Allocate and copy reference sequence to device
+    // Allocate and copy reference sequence
     CHECK_CUDA_ERROR(cudaMalloc(&d_ref_num, refLen * sizeof(int8_t)));
     CHECK_CUDA_ERROR(cudaMemcpy(d_ref_num, ref_num.data(), refLen * sizeof(int8_t), cudaMemcpyHostToDevice));
     
-    // Allocate and copy profile to device 
-    // Profile format: [nt_type][read_position]
-    size_t profile_size = 5 * readLen * sizeof(T);  // 5 nucleotide types
+    // Allocate and copy profile
+    size_t profile_size = profile.size() * sizeof(T);
     CHECK_CUDA_ERROR(cudaMalloc(&d_profile, profile_size));
     CHECK_CUDA_ERROR(cudaMemcpy(d_profile, profile.data(), profile_size, cudaMemcpyHostToDevice));
     
-    // Allocate output arrays on device
+    // Allocate output arrays
     CHECK_CUDA_ERROR(cudaMalloc(&d_maxColumn, refLen * sizeof(T)));
     CHECK_CUDA_ERROR(cudaMalloc(&d_end_read_column, refLen * sizeof(int32_t)));
     
-    // Initialize output arrays to zero
+    // Allocate global max tracking
+    CHECK_CUDA_ERROR(cudaMalloc(&d_max_score, sizeof(T)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_max_pos_ref, sizeof(int32_t)));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_max_pos_read, sizeof(int32_t)));
+    
+    // Initialize output arrays
     CHECK_CUDA_ERROR(cudaMemset(d_maxColumn, 0, refLen * sizeof(T)));
     CHECK_CUDA_ERROR(cudaMemset(d_end_read_column, 0, refLen * sizeof(int32_t)));
+    CHECK_CUDA_ERROR(cudaMemset(d_max_score, 0, sizeof(T)));
     
-    // Configure kernel parameters
+    // Initialize max positions with sentinel values
+    int32_t sentinel = -1;
+    CHECK_CUDA_ERROR(cudaMemcpy(d_max_pos_ref, &sentinel, sizeof(int32_t), cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_max_pos_read, &sentinel, sizeof(int32_t), cudaMemcpyHostToDevice));
+    
+    // Configure kernel - PARALLELIZATION: Each thread handles one reference position
     int threadsPerBlock = 256;
     int blocksPerGrid = (refLen + threadsPerBlock - 1) / threadsPerBlock;
     
-    // Determine which kernel to use based on readLen
-    if (readLen <= 1024) {  // Use shared memory version for shorter reads
-        size_t sharedMemSize = 2 * readLen * sizeof(T);
-        ssw_shared_kernel<T><<<blocksPerGrid, threadsPerBlock, sharedMemSize>>>(
-            d_ref_num, ref_dir, refLen, readLen, 
-            weight_gapO, weight_gapE, d_profile, terminate, bias,
-            d_maxColumn, d_end_read_column
-        );
-    } else {  // Use global memory version for longer reads
-        ssw_kernel<T><<<blocksPerGrid, threadsPerBlock>>>(
-            d_ref_num, ref_dir, refLen, readLen, 
-            weight_gapO, weight_gapE, d_profile, terminate, bias,
-            d_maxColumn, d_end_read_column
-        );
-    }
+    // Calculate shared memory size per block
+    size_t sharedMemSize = std::min(static_cast<size_t>(readLen * 2 * sizeof(T) * threadsPerBlock), 
+                                  static_cast<size_t>(48 * 1024)); // 48KB typical max shared memory
     
-    // Check for kernel launch errors
+    // Launch kernel - PARALLELIZATION: Each thread computes one column of the DP matrix
+    ssw_kernel<T><<<blocksPerGrid, threadsPerBlock, sharedMemSize>>>(
+        d_ref_num, ref_dir, refLen, readLen,
+        weight_gapO, weight_gapE, d_profile, terminate, bias,
+        d_maxColumn, d_end_read_column,
+        d_max_pos_ref, d_max_pos_read, d_max_score
+    );
+    
+    // Check for kernel errors
     CHECK_CUDA_ERROR(cudaGetLastError());
-    
-    // Wait for kernel to finish
     CHECK_CUDA_ERROR(cudaDeviceSynchronize());
     
     // Copy results back to host
     std::vector<T> maxColumn(refLen);
     std::vector<int32_t> end_read_column(refLen);
+    T max_score;
+    int32_t max_pos_ref, max_pos_read;
     
     CHECK_CUDA_ERROR(cudaMemcpy(maxColumn.data(), d_maxColumn, refLen * sizeof(T), cudaMemcpyDeviceToHost));
     CHECK_CUDA_ERROR(cudaMemcpy(end_read_column.data(), d_end_read_column, refLen * sizeof(int32_t), cudaMemcpyDeviceToHost));
+    CHECK_CUDA_ERROR(cudaMemcpy(&max_score, d_max_score, sizeof(T), cudaMemcpyDeviceToHost));
+    CHECK_CUDA_ERROR(cudaMemcpy(&max_pos_ref, d_max_pos_ref, sizeof(int32_t), cudaMemcpyDeviceToHost));
+    CHECK_CUDA_ERROR(cudaMemcpy(&max_pos_read, d_max_pos_read, sizeof(int32_t), cudaMemcpyDeviceToHost));
     
-    // Find best alignment
-    auto best = find_max_score(maxColumn, refLen, bias);
-    uint16_t max_score = best.first;
-    int32_t end_ref = best.second;
-    int32_t end_read = -1;
-    
-    // Get read position if we found a valid alignment
-    if (end_ref >= 0 && end_ref < refLen) {
-        end_read = end_read_column[end_ref];
+    // Handle overflow for int8_t
+    uint16_t final_score;
+    if (std::is_same<T, int8_t>::value) {
+        auto max_with_bias = static_cast<uint16_t>(max_score) + static_cast<uint16_t>(bias);
+        final_score = max_with_bias >= 255 ? 255 : max_score;
+    } else {
+        final_score = max_score;
     }
     
     // Find second best alignment
-    auto second_best = find_second_best(maxColumn, end_ref, refLen, maskLen);
-    uint16_t second_score = second_best.first;
-    int32_t second_ref = second_best.second;
+    T second_max = 0;
+    int32_t second_max_pos = -1;
+    
+    // Search before the best alignment
+    int32_t edge = (max_pos_ref - maskLen) > 0 ? (max_pos_ref - maskLen) : 0;
+    for (int32_t i = 0; i < edge; i++) {
+        if (maxColumn[i] > second_max) {
+            second_max = maxColumn[i];
+            second_max_pos = i;
+        }
+    }
+    
+    // Search after the best alignment
+    edge = (max_pos_ref + maskLen) > refLen ? refLen : (max_pos_ref + maskLen);
+    for (int32_t i = edge + 1; i < refLen; i++) {
+        if (maxColumn[i] > second_max) {
+            second_max = maxColumn[i];
+            second_max_pos = i;
+        }
+    }
+    
+    // Debug output
+    std::cout << "CUDA Final results:" << std::endl;
+    std::cout << "  Best score: " << final_score << " at ref=" << max_pos_ref
+              << ", read=" << max_pos_read << std::endl;
+    std::cout << "  Second best score: " << second_max << " at ref=" << second_max_pos << std::endl;
+    
+    // Prepare return values
+    std::vector<alignment_end> results(2);
+    
+    // Set best alignment
+    results[0].score = final_score;
+    results[0].ref = max_pos_ref;
+    results[0].read = max_pos_read;
+    
+    // Set second best alignment
+    results[1].score = second_max;
+    results[1].ref = second_max_pos;
+    results[1].read = 0;  // We don't track read position for second best alignment
     
     // Free device memory
     cudaFree(d_ref_num);
     cudaFree(d_profile);
     cudaFree(d_maxColumn);
     cudaFree(d_end_read_column);
-    
-    // Prepare return value
-    std::vector<alignment_end> results(2);
-    
-    // Set best alignment
-    results[0].score = max_score;
-    results[0].ref = end_ref;
-    results[0].read = end_read;
-    
-    // Set second best alignment
-    results[1].score = second_score;
-    results[1].ref = second_ref;
-    results[1].read = 0;  // We don't track read position for second best alignment
+    cudaFree(d_max_score);
+    cudaFree(d_max_pos_ref);
+    cudaFree(d_max_pos_read);
     
     return results;
 }
-
 /**
  * @brief Smith-Waterman for byte precision (int8_t)
  */
@@ -636,6 +706,9 @@ std::unique_ptr<s_align> ssw_main_cuda(
 
     r->ref_begin1 = bests_reverse[0].ref;
     r->read_begin1 = r->read_end1 - bests_reverse[0].read;
+
+    std::cout << "r->ref_begin1 = " << r->ref_begin1 << std::endl;
+    std::cout << "r->read_begin1 = " << r->read_begin1 << std::endl;
 
     if (r->score1 > bests_reverse[0].score) {
         std::cerr << "Warning: The alignment path of one pair of sequences may miss a small part." << std::endl;
